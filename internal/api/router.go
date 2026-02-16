@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/cors"
 
 	"github.com/CaioWing/Harbor/internal/api/device"
+	apidocs "github.com/CaioWing/Harbor/internal/api/docs"
 	"github.com/CaioWing/Harbor/internal/api/management"
 	"github.com/CaioWing/Harbor/internal/api/middleware"
 	"github.com/CaioWing/Harbor/internal/api/response"
@@ -58,6 +59,13 @@ func NewRouter(deps RouterDeps) http.Handler {
 
 	// Prometheus metrics
 	r.Get("/metrics", metrics.Handler())
+
+	// API documentation
+	docsHandler := apidocs.Handler()
+	r.Get("/docs", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/docs/", http.StatusMovedPermanently)
+	})
+	r.Handle("/docs/*", http.StripPrefix("/docs", docsHandler))
 
 	// Device API — used by harbor-agent on devices
 	deviceAuthHandler := device.NewAuthHandler(deps.DeviceSvc)

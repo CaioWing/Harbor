@@ -8,6 +8,7 @@ Diferente do Mender (que trabalha com imagens rootfs completas), o Harbor opera 
  
 - [Arquitetura](#arquitetura)
 - [Quick Start](#quick-start)
+- [Swagger / OpenAPI](#swagger--openapi)
 - [Configuracao do Servidor](#configuracao-do-servidor)
 - [API de Gerenciamento (Frontend/Operador)](#api-de-gerenciamento)
 - [Configurando um Device (Client)](#configurando-um-device)
@@ -84,7 +85,14 @@ make run
 curl http://localhost:8080/health
 # {"status":"ok"}
 ```
- 
+
+### Swagger / OpenAPI
+
+A documentacao da API fica disponivel em:
+
+- **Swagger UI:** `http://localhost:8080/docs`
+- **Spec OpenAPI (YAML):** `http://localhost:8080/docs/openapi.yaml`
+
 ---
  
 ## Configuracao do Servidor
@@ -738,6 +746,8 @@ watch -n 5 "curl -s http://localhost:8080/api/v1/management/deployments/$DEPLOY_
 |--------|-----------|--------------------------|
 | GET    | `/health`  | Health check             |
 | GET    | `/metrics` | Metricas Prometheus      |
+| GET    | `/docs`    | Swagger UI da API        |
+| GET    | `/docs/openapi.yaml` | Spec OpenAPI 3.0 |
  
 ### Device API (`/api/v1/device`)
  

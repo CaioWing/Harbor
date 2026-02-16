@@ -517,7 +517,7 @@ O Harbor mantem historico de todos os artifacts, entao qualquer versao pode ser 
 - [x] **Device Auth**: Geracao de token opaco no aceite, validacao via middleware
 - [x] **Artifact Upload**: Upload multipart (500MB limit), checksum SHA-256 via TeeReader, storage local
 - [x] **Artifact Metadata**: CRUD completo (list, get, upload, download, delete)
-- [ ] Testes unitarios dos services
+- [x] Testes unitarios dos services (42 testes: device, artifact, deployment)
 
 ### Fase 2: Deployments (Semanas 3-4) — CONCLUIDA
 > Funcionalidade principal: orquestrar updates nos devices.
@@ -543,17 +543,18 @@ O Harbor mantem historico de todos os artifacts, entao qualquer versao pode ser 
 - [x] **CORS**: Configuravel via HARBOR_CORS_ORIGINS, expondo headers necessarios
 - [ ] Testes end-to-end
 
-### Fase 4: Robustez (Semana 7+)
+### Fase 4: Robustez (Semana 7+) — CONCLUIDA
 > Producao-ready.
 
-- [ ] **Retry Logic**: Device tenta download N vezes
+- [x] **Retry Logic**: Configuracao de retry enviada ao device (max_attempts, interval, backoff)
 - [x] **Checksum Verification**: SHA-256 calculado no upload e enviado via header no download
-- [ ] **Rate Limiting**: Protecao contra polling excessivo
-- [ ] **Audit Log**: Registro de acoes (quem fez o que, quando)
+- [x] **Rate Limiting**: Per-IP token bucket (device: 10req/s, management: 30req/s) com cleanup automatico
+- [x] **Audit Log**: Tabela audit_log + middleware automatico para acoes de management + endpoint GET /audit
 - [x] **Graceful Shutdown**: Encerramento limpo com signal handling (SIGINT/SIGTERM) e timeout de 10s
 - [x] **Health Check**: Endpoint GET /health retorna {"status": "ok"}
-- [ ] **Metricas**: Prometheus-compatible /metrics (opcional)
-- [ ] **Cleanup Job**: Remover artifacts orfaos do storage
+- [x] **Metricas**: Prometheus-compatible GET /metrics (requests total, duration, active requests)
+- [x] **Cleanup Job**: Scheduler periodico (6h) remove artifacts orfaos do storage
+- [x] **Auth Refresh**: POST /auth/refresh para renovar JWT sem re-login
 
 ---
 
@@ -704,13 +705,18 @@ volumes:
 18. ~~**Health Check**~~ — GET /health endpoint
 19. ~~**Graceful Shutdown**~~ — Signal handling + timeout
 
+### Concluido (Fase 4)
+
+20. ~~**Unit Tests**~~ — 42 testes cobrindo DeviceService, ArtifactService, DeploymentService com mocks
+21. ~~**Rate Limiting**~~ — Per-IP token bucket middleware (device 10req/s, management 30req/s)
+22. ~~**Audit Log**~~ — Tabela audit_log, AuditService, middleware automatico, endpoint GET /audit
+23. ~~**Cleanup Job**~~ — Scheduler a cada 6h remove artifacts orfaos (sem deployment ativo + storage missing)
+24. ~~**Auth Refresh**~~ — POST /auth/refresh gera novo JWT para usuario autenticado
+25. ~~**Retry Logic**~~ — Configuracao de retry (max_attempts, interval, backoff) enviada ao device
+26. ~~**Metricas**~~ — Prometheus GET /metrics (requests total por method/status, duration, active requests)
+
 ### Pendente
 
-1. **Testes** — Unit tests dos services + integration com testcontainers
+1. **Testes de integracao** — Testcontainers-go com PostgreSQL real
 2. **Documentacao** — OpenAPI/Swagger spec para o frontend
-3. **Retry Logic** — Tentativas automaticas de download no agent
-4. **Rate Limiting** — Protecao contra polling excessivo
-5. **Audit Log** — Registro de acoes (quem, o que, quando)
-6. **Metricas** — Prometheus /metrics endpoint
-7. **Cleanup Job** — Remocao de artifacts orfaos do storage
-8. **Auth Refresh** — Endpoint POST /auth/refresh para renovar JWT
+3. **Testes end-to-end** — Fluxo completo device → deploy → status

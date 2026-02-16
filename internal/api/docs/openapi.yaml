@@ -1,0 +1,1788 @@
+openapi: 3.0.3
+info:
+  title: Harbor API
+  version: "1.0.0"
+  description: |
+    API HTTP do Harbor para gerenciamento de devices, artifacts e deployments,
+    incluindo a API de device usada por agentes remotos.
+servers:
+  - url: http://localhost:8080
+tags:
+  - name: operational
+    description: Endpoints operacionais do servidor
+  - name: device-auth
+    description: Autenticacao de devices
+  - name: device-deployments
+    description: Fluxo de deployment consumido pelos devices
+  - name: device-inventory
+    description: Atualizacao de inventario enviada pelos devices
+  - name: management-auth
+    description: Autenticacao de operadores (JWT)
+  - name: management-devices
+    description: Gerenciamento de devices
+  - name: management-artifacts
+    description: Gerenciamento de artifacts
+  - name: management-deployments
+    description: Gerenciamento de deployments
+  - name: management-audit
+    description: Consulta de auditoria
+paths:
+  /health:
+    get:
+      tags:
+        - operational
+      summary: Verifica se a API esta ativa
+      operationId: getHealth
+      responses:
+        "200":
+          description: Servico saudavel
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /metrics:
+    get:
+      tags:
+        - operational
+      summary: Exposicao de metricas em formato Prometheus
+      operationId: getMetrics
+      responses:
+        "200":
+          description: Metricas no formato de texto do Prometheus
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /api/v1/device/auth:
+    post:
+      tags:
+        - device-auth
+      summary: Registra/autentica um device pela identidade
+      operationId: deviceAuthenticate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceAuthRequest'
+      responses:
+        "200":
+          description: Device autenticado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceAuthResponse'
+        "400":
+          description: Payload invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "401":
+          description: Device pendente de aprovacao
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "403":
+          description: Device rejeitado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "500":
+          description: Falha interna de autenticacao
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/device/deployments/next:
+    get:
+      tags:
+        - device-deployments
+      summary: Retorna o proximo deployment pendente para o device
+      operationId: deviceGetNextDeployment
+      security:
+        - DeviceBearerAuth: []
+      responses:
+        "200":
+          description: Deployment pendente encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NextDeploymentResponse'
+        "204":
+          description: Nenhum deployment pendente
+        "400":
+          description: Contexto do device invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "401":
+          description: Token de device ausente ou invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "500":
+          description: Falha ao consultar deployments
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/device/deployments/{id}/status:
+    put:
+      tags:
+        - device-deployments
+      summary: Atualiza o status de execucao de um deployment no device
+      operationId: deviceUpdateDeploymentStatus
+      security:
+        - DeviceBearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: ID do deployment_device
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateDeploymentStatusRequest'
+      responses:
+        "204":
+          description: Status atualizado
+        "400":
+          description: ID, payload ou status invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "401":
+          description: Token de device ausente ou invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "404":
+          description: deployment_device nao encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "500":
+          description: Falha ao atualizar status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/device/deployments/{id}/download:
+    get:
+      tags:
+        - device-deployments
+      summary: Faz download do artifact do deployment
+      operationId: deviceDownloadDeploymentArtifact
+      security:
+        - DeviceBearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: ID do deployment_device
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Arquivo do artifact
+          headers:
+            Content-Disposition:
+              description: Nome original do arquivo
+              schema:
+                type: string
+            X-Checksum-SHA256:
+              description: Checksum SHA-256 esperado para validacao
+              schema:
+                type: string
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "400":
+          description: ID invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "401":
+          description: Token de device ausente ou invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "404":
+          description: Nenhum deployment pendente encontrado para o device
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "500":
+          description: Falha ao abrir artifact
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/device/inventory:
+    patch:
+      tags:
+        - device-inventory
+      summary: Atualiza inventario dinamico do device
+      operationId: deviceUpdateInventory
+      security:
+        - DeviceBearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InventoryPayload'
+      responses:
+        "204":
+          description: Inventario atualizado
+        "400":
+          description: Payload invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "401":
+          description: Token de device ausente ou invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "500":
+          description: Falha ao atualizar inventario
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/management/auth/login:
+    post:
+      tags:
+        - management-auth
+      summary: Realiza login administrativo e retorna JWT
+      operationId: managementLogin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        "200":
+          description: Login realizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        "400":
+          description: Payload invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "401":
+          description: Credenciais invalidas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "500":
+          description: Falha ao gerar token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/management/auth/refresh:
+    post:
+      tags:
+        - management-auth
+      summary: Gera um novo JWT para usuario autenticado
+      operationId: managementRefresh
+      security:
+        - ManagementBearerAuth: []
+      responses:
+        "200":
+          description: Token renovado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        "401":
+          description: Token ausente ou invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "500":
+          description: Falha ao gerar token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/management/devices:
+    get:
+      tags:
+        - management-devices
+      summary: Lista devices com filtros e paginacao
+      operationId: managementListDevices
+      security:
+        - ManagementBearerAuth: []
+      parameters:
+        - in: query
+          name: status
+          schema:
+            $ref: '#/components/schemas/DeviceStatus'
+        - in: query
+          name: device_type
+          schema:
+            type: string
+        - in: query
+          name: tag
+          description: Informe repetido para filtrar por multiplas tags
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              type: string
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - in: query
+          name: per_page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - in: query
+          name: sort
+          schema:
+            type: string
+        - in: query
+          name: order
+          schema:
+            type: string
+            enum: [asc, desc]
+      responses:
+        "200":
+          description: Lista paginada de devices
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedDevicesResponse'
+        "401":
+          description: Token ausente ou invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "500":
+          description: Falha ao listar devices
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/management/devices/count:
+    get:
+      tags:
+        - management-devices
+      summary: Retorna contagem de devices por status
+      operationId: managementCountDevices
+      security:
+        - ManagementBearerAuth: []
+      responses:
+        "200":
+          description: Contagem por status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceCountResponse'
+        "401":
+          description: Token ausente ou invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "500":
+          description: Falha ao contar devices
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/management/devices/{id}:
+    get:
+      tags:
+        - management-devices
+      summary: Retorna detalhes de um device
+      operationId: managementGetDevice
+      security:
+        - ManagementBearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Device encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+        "400":
+          description: ID invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "401":
+          description: Token ausente ou invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "404":
+          description: Device nao encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "500":
+          description: Falha ao consultar device
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags:
+        - management-devices
+      summary: Remove (decommission) um device
+      operationId: managementDeleteDevice
+      security:
+        - ManagementBearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Device removido
+        "400":
+          description: ID invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "401":
+          description: Token ausente ou invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "404":
+          description: Device nao encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "500":
+          description: Falha ao remover device
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/management/devices/{id}/status:
+    put:
+      tags:
+        - management-devices
+      summary: Atualiza status de aprovacao/rejeicao de um device
+      operationId: managementUpdateDeviceStatus
+      security:
+        - ManagementBearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateDeviceStatusRequest'
+      responses:
+        "204":
+          description: Status atualizado
+        "400":
+          description: ID ou payload invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "401":
+          description: Token ausente ou invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "404":
+          description: Device nao encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "500":
+          description: Falha ao atualizar status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/management/devices/{id}/tags:
+    patch:
+      tags:
+        - management-devices
+      summary: Atualiza lista de tags do device
+      operationId: managementUpdateDeviceTags
+      security:
+        - ManagementBearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateDeviceTagsRequest'
+      responses:
+        "204":
+          description: Tags atualizadas
+        "400":
+          description: ID ou payload invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "401":
+          description: Token ausente ou invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "404":
+          description: Device nao encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "500":
+          description: Falha ao atualizar tags
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/management/artifacts:
+    get:
+      tags:
+        - management-artifacts
+      summary: Lista artifacts com filtros e paginacao
+      operationId: managementListArtifacts
+      security:
+        - ManagementBearerAuth: []
+      parameters:
+        - in: query
+          name: name
+          schema:
+            type: string
+        - in: query
+          name: device_type
+          schema:
+            type: string
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - in: query
+          name: per_page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - in: query
+          name: sort
+          schema:
+            type: string
+        - in: query
+          name: order
+          schema:
+            type: string
+            enum: [asc, desc]
+      responses:
+        "200":
+          description: Lista paginada de artifacts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedArtifactsResponse'
+        "401":
+          description: Token ausente ou invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "500":
+          description: Falha ao listar artifacts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags:
+        - management-artifacts
+      summary: Faz upload de um novo artifact
+      operationId: managementUploadArtifact
+      security:
+        - ManagementBearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ArtifactUploadRequest'
+      responses:
+        "201":
+          description: Artifact criado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Artifact'
+        "400":
+          description: Payload invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "401":
+          description: Token ausente ou invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "409":
+          description: Artifact com mesmo nome/versao ja existe
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "500":
+          description: Falha ao criar artifact
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/management/artifacts/{id}:
+    get:
+      tags:
+        - management-artifacts
+      summary: Retorna detalhes de um artifact
+      operationId: managementGetArtifact
+      security:
+        - ManagementBearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Artifact encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Artifact'
+        "400":
+          description: ID invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "401":
+          description: Token ausente ou invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "404":
+          description: Artifact nao encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "500":
+          description: Falha ao consultar artifact
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags:
+        - management-artifacts
+      summary: Remove um artifact
+      operationId: managementDeleteArtifact
+      security:
+        - ManagementBearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Artifact removido
+        "400":
+          description: ID invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "401":
+          description: Token ausente ou invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "404":
+          description: Artifact nao encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "500":
+          description: Falha ao remover artifact
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/management/artifacts/{id}/download:
+    get:
+      tags:
+        - management-artifacts
+      summary: Faz download do arquivo bruto do artifact
+      operationId: managementDownloadArtifact
+      security:
+        - ManagementBearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Arquivo do artifact
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+            X-Checksum-SHA256:
+              schema:
+                type: string
+            Content-Length:
+              schema:
+                type: string
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "400":
+          description: ID invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "401":
+          description: Token ausente ou invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "404":
+          description: Artifact nao encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "500":
+          description: Falha ao abrir artifact
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/management/deployments:
+    get:
+      tags:
+        - management-deployments
+      summary: Lista deployments com filtros e paginacao
+      operationId: managementListDeployments
+      security:
+        - ManagementBearerAuth: []
+      parameters:
+        - in: query
+          name: status
+          schema:
+            $ref: '#/components/schemas/DeploymentStatus'
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - in: query
+          name: per_page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - in: query
+          name: sort
+          schema:
+            type: string
+        - in: query
+          name: order
+          schema:
+            type: string
+            enum: [asc, desc]
+      responses:
+        "200":
+          description: Lista paginada de deployments
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedDeploymentsResponse'
+        "401":
+          description: Token ausente ou invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "500":
+          description: Falha ao listar deployments
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags:
+        - management-deployments
+      summary: Cria um novo deployment
+      operationId: managementCreateDeployment
+      security:
+        - ManagementBearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDeploymentRequest'
+      responses:
+        "201":
+          description: Deployment criado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Deployment'
+        "400":
+          description: Payload invalido ou sem targets validos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "401":
+          description: Token ausente ou invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "404":
+          description: Artifact nao encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "500":
+          description: Falha ao criar deployment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/management/deployments/statistics:
+    get:
+      tags:
+        - management-deployments
+      summary: Retorna estatisticas agregadas dos deployments
+      operationId: managementDeploymentStats
+      security:
+        - ManagementBearerAuth: []
+      responses:
+        "200":
+          description: Estatisticas de deployment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeploymentStats'
+        "401":
+          description: Token ausente ou invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "500":
+          description: Falha ao obter estatisticas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/management/deployments/{id}:
+    get:
+      tags:
+        - management-deployments
+      summary: Retorna detalhes de um deployment
+      operationId: managementGetDeployment
+      security:
+        - ManagementBearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Deployment encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Deployment'
+        "400":
+          description: ID invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "401":
+          description: Token ausente ou invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "404":
+          description: Deployment nao encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "500":
+          description: Falha ao consultar deployment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/management/deployments/{id}/cancel:
+    post:
+      tags:
+        - management-deployments
+      summary: Cancela um deployment em andamento
+      operationId: managementCancelDeployment
+      security:
+        - ManagementBearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Deployment cancelado
+        "400":
+          description: ID invalido ou estado nao cancelavel
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "401":
+          description: Token ausente ou invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "404":
+          description: Deployment nao encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "500":
+          description: Falha ao cancelar deployment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/management/deployments/{id}/devices:
+    get:
+      tags:
+        - management-deployments
+      summary: Lista status do deployment por device
+      operationId: managementGetDeploymentDevices
+      security:
+        - ManagementBearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Lista de deployment_devices do deployment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeploymentDevicesDataResponse'
+        "400":
+          description: ID invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "401":
+          description: Token ausente ou invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "500":
+          description: Falha ao buscar deployment devices
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/management/audit:
+    get:
+      tags:
+        - management-audit
+      summary: Lista entradas de auditoria
+      operationId: managementListAudit
+      security:
+        - ManagementBearerAuth: []
+      parameters:
+        - in: query
+          name: actor
+          schema:
+            type: string
+        - in: query
+          name: action
+          schema:
+            type: string
+        - in: query
+          name: resource
+          schema:
+            type: string
+        - in: query
+          name: order
+          schema:
+            type: string
+            enum: [asc, desc]
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - in: query
+          name: per_page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        "200":
+          description: Lista paginada de eventos de auditoria
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAuditResponse'
+        "401":
+          description: Token ausente ou invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "500":
+          description: Falha ao listar auditoria
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    ManagementBearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT de operador obtido em /api/v1/management/auth/login
+    DeviceBearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: Opaque
+      description: Token opaco de device obtido em /api/v1/device/auth
+
+  schemas:
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+
+    HealthResponse:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          example: ok
+
+    Pagination:
+      type: object
+      required:
+        - page
+        - per_page
+        - total
+        - total_pages
+      properties:
+        page:
+          type: integer
+          minimum: 1
+        per_page:
+          type: integer
+          minimum: 1
+        total:
+          type: integer
+          minimum: 0
+        total_pages:
+          type: integer
+          minimum: 0
+
+    DeviceStatus:
+      type: string
+      enum:
+        - pending
+        - accepted
+        - rejected
+        - decommissioned
+
+    IdentityData:
+      type: object
+      additionalProperties:
+        type: string
+      description: Mapa flexivel de identidade do device; device_type e obrigatorio no auth.
+
+    InventoryPayload:
+      type: object
+      additionalProperties: true
+      description: Mapa flexivel com inventario reportado pelo device.
+
+    Device:
+      type: object
+      required:
+        - id
+        - identity_hash
+        - identity_data
+        - status
+        - inventory
+        - device_type
+        - tags
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        identity_hash:
+          type: string
+        identity_data:
+          $ref: '#/components/schemas/IdentityData'
+        status:
+          $ref: '#/components/schemas/DeviceStatus'
+        inventory:
+          $ref: '#/components/schemas/InventoryPayload'
+        device_type:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        last_check_in:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Artifact:
+      type: object
+      required:
+        - id
+        - name
+        - version
+        - description
+        - file_name
+        - file_size
+        - checksum_sha256
+        - target_path
+        - file_mode
+        - file_owner
+        - device_types
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        version:
+          type: string
+        description:
+          type: string
+        file_name:
+          type: string
+        file_size:
+          type: integer
+          format: int64
+        checksum_sha256:
+          type: string
+        target_path:
+          type: string
+        file_mode:
+          type: string
+        file_owner:
+          type: string
+        device_types:
+          type: array
+          items:
+            type: string
+        pre_install_cmd:
+          type: string
+        post_install_cmd:
+          type: string
+        rollback_cmd:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    DeploymentStatus:
+      type: string
+      enum:
+        - scheduled
+        - active
+        - completed
+        - cancelled
+
+    Deployment:
+      type: object
+      required:
+        - id
+        - name
+        - artifact_id
+        - status
+        - max_parallel
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        artifact_id:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/DeploymentStatus'
+        target_device_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        target_device_tags:
+          type: array
+          items:
+            type: string
+        target_device_types:
+          type: array
+          items:
+            type: string
+        max_parallel:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        finished_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    DeploymentDeviceStatus:
+      type: string
+      enum:
+        - pending
+        - downloading
+        - installing
+        - success
+        - failure
+        - skipped
+
+    DeploymentDevice:
+      type: object
+      required:
+        - id
+        - deployment_id
+        - device_id
+        - status
+        - attempts
+        - log
+      properties:
+        id:
+          type: string
+          format: uuid
+        deployment_id:
+          type: string
+          format: uuid
+        device_id:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/DeploymentDeviceStatus'
+        attempts:
+          type: integer
+        log:
+          type: string
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        finished_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    DeploymentStats:
+      type: object
+      required:
+        - total
+        - scheduled
+        - active
+        - completed
+        - cancelled
+      properties:
+        total:
+          type: integer
+        scheduled:
+          type: integer
+        active:
+          type: integer
+        completed:
+          type: integer
+        cancelled:
+          type: integer
+
+    AuditEntry:
+      type: object
+      required:
+        - id
+        - actor
+        - actor_type
+        - action
+        - resource
+        - resource_id
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        actor:
+          type: string
+        actor_type:
+          type: string
+          description: management, device ou system
+        action:
+          type: string
+        resource:
+          type: string
+        resource_id:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+        ip_address:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+
+    LoginResponse:
+      type: object
+      required:
+        - token
+        - expires_at
+      properties:
+        token:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+
+    DeviceAuthRequest:
+      type: object
+      required:
+        - identity
+      properties:
+        identity:
+          $ref: '#/components/schemas/IdentityData'
+
+    DeviceAuthResponse:
+      type: object
+      required:
+        - token
+      properties:
+        token:
+          type: string
+
+    NextDeploymentArtifact:
+      type: object
+      required:
+        - name
+        - version
+        - target_path
+        - file_mode
+        - checksum_sha256
+        - file_size
+        - download_url
+      properties:
+        name:
+          type: string
+        version:
+          type: string
+        target_path:
+          type: string
+        file_mode:
+          type: string
+        checksum_sha256:
+          type: string
+        file_size:
+          type: integer
+          format: int64
+        download_url:
+          type: string
+        pre_install_cmd:
+          type: string
+        post_install_cmd:
+          type: string
+
+    RetryConfig:
+      type: object
+      required:
+        - max_attempts
+        - interval_sec
+        - backoff_multiplier
+      properties:
+        max_attempts:
+          type: integer
+        interval_sec:
+          type: integer
+        backoff_multiplier:
+          type: integer
+
+    NextDeploymentResponse:
+      type: object
+      required:
+        - deployment_id
+        - dd_id
+        - artifact
+        - retry
+      properties:
+        deployment_id:
+          type: string
+          format: uuid
+        dd_id:
+          type: string
+          format: uuid
+        artifact:
+          $ref: '#/components/schemas/NextDeploymentArtifact'
+        retry:
+          $ref: '#/components/schemas/RetryConfig'
+
+    UpdateDeploymentStatusRequest:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum:
+            - downloading
+            - installing
+            - success
+            - failure
+        log:
+          type: string
+
+    UpdateDeviceStatusRequest:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum:
+            - accepted
+            - rejected
+
+    UpdateDeviceTagsRequest:
+      type: object
+      required:
+        - tags
+      properties:
+        tags:
+          type: array
+          items:
+            type: string
+
+    ArtifactUploadRequest:
+      type: object
+      required:
+        - name
+        - version
+        - target_path
+        - device_types
+        - file
+      properties:
+        name:
+          type: string
+        version:
+          type: string
+        description:
+          type: string
+        target_path:
+          type: string
+        file_mode:
+          type: string
+          description: Permissoes Unix. Default no backend e 0644.
+        file_owner:
+          type: string
+          description: Exemplo root:root
+        device_types:
+          type: string
+          description: Tipos compativeis separados por virgula.
+        pre_install_cmd:
+          type: string
+        post_install_cmd:
+          type: string
+        rollback_cmd:
+          type: string
+        file:
+          type: string
+          format: binary
+
+    CreateDeploymentRequest:
+      type: object
+      required:
+        - name
+        - artifact_id
+      properties:
+        name:
+          type: string
+        artifact_id:
+          type: string
+          format: uuid
+        target_device_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        target_device_tags:
+          type: array
+          items:
+            type: string
+        target_device_types:
+          type: array
+          items:
+            type: string
+        max_parallel:
+          type: integer
+          minimum: 0
+          description: Quantidade maxima de devices processando em paralelo.
+
+    DeviceCountResponse:
+      type: object
+      additionalProperties:
+        type: integer
+      example:
+        pending: 3
+        accepted: 10
+        rejected: 1
+
+    DeploymentDevicesDataResponse:
+      type: object
+      required:
+        - data
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeploymentDevice'
+
+    PaginatedDevicesResponse:
+      type: object
+      required:
+        - data
+        - pagination
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Device'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    PaginatedArtifactsResponse:
+      type: object
+      required:
+        - data
+        - pagination
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Artifact'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    PaginatedDeploymentsResponse:
+      type: object
+      required:
+        - data
+        - pagination
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Deployment'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    PaginatedAuditResponse:
+      type: object
+      required:
+        - data
+        - pagination
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditEntry'
+        pagination:
+          $ref: '#/components/schemas/Pagination'

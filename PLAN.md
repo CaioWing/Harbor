@@ -507,51 +507,51 @@ O Harbor mantem historico de todos os artifacts, entao qualquer versao pode ser 
 
 ## 7. MVP — Features e Prioridades
 
-### Fase 1: Core (Semanas 1-2)
+### Fase 1: Core (Semanas 1-2) — CONCLUIDA
 > Fundacao: dispositivos se conectam, arquivos sao enviados.
 
 - [x] Setup do projeto (go.mod, estrutura de dirs, docker-compose)
-- [ ] **Config**: Leitura de env vars, struct de configuracao
-- [ ] **Database**: Conexao PostgreSQL + migrations
-- [ ] **Device Identity**: Registro, fingerprint hash, estados (pending/accepted)
-- [ ] **Device Auth**: Geracao de token no aceite, validacao em requests
-- [ ] **Artifact Upload**: Upload multipart, calculo de checksum, storage local
-- [ ] **Artifact Metadata**: CRUD basico de artifacts
+- [x] **Config**: Leitura de env vars, struct de configuracao
+- [x] **Database**: Conexao PostgreSQL + migrations (pgx + golang-migrate)
+- [x] **Device Identity**: Registro, fingerprint SHA-256, estados (pending/accepted/rejected/decommissioned)
+- [x] **Device Auth**: Geracao de token opaco no aceite, validacao via middleware
+- [x] **Artifact Upload**: Upload multipart (500MB limit), checksum SHA-256 via TeeReader, storage local
+- [x] **Artifact Metadata**: CRUD completo (list, get, upload, download, delete)
 - [ ] Testes unitarios dos services
 
-### Fase 2: Deployments (Semanas 3-4)
+### Fase 2: Deployments (Semanas 3-4) — CONCLUIDA
 > Funcionalidade principal: orquestrar updates nos devices.
 
-- [ ] **Criar Deployment**: Selecionar artifact + devices/tags destino
-- [ ] **Resolver Targets**: Expandir tags/tipos em lista de devices
-- [ ] **Device Polling**: Endpoint GET /deployments/next
-- [ ] **Download de Artifact**: Stream do arquivo para o device
-- [ ] **Status Tracking**: Device reporta progresso, server agrega
-- [ ] **Deployment Lifecycle**: scheduled → active → completed/cancelled
+- [x] **Criar Deployment**: Selecionar artifact + devices/tags destino
+- [x] **Resolver Targets**: Expansao de device IDs, tags e device types em lista de devices
+- [x] **Device Polling**: Endpoint GET /deployments/next com detalhes do artifact
+- [x] **Download de Artifact**: Stream do arquivo com header X-Checksum-SHA256
+- [x] **Status Tracking**: Device reporta progresso (downloading/installing/success/failure)
+- [x] **Deployment Lifecycle**: scheduled → active → completed/cancelled com cancel endpoint
 - [ ] Testes de integracao com testcontainers
 
-### Fase 3: Gerenciamento (Semanas 5-6)
+### Fase 3: Gerenciamento (Semanas 5-6) — CONCLUIDA
 > API completa para o frontend React consumir.
 
-- [ ] **Management Auth**: Login/JWT para operadores
-- [ ] **Device Listing**: Filtros, paginacao, ordenacao, busca
-- [ ] **Device Tags**: CRUD de tags para agrupamento
-- [ ] **Device Inventory**: Visualizacao de atributos
-- [ ] **Deployment Dashboard**: Listagem com estatisticas
-- [ ] **Deployment Details**: Status por device, logs
-- [ ] **Artifact Management**: Listagem, download, remocao
-- [ ] **CORS**: Configuracao para frontend React
+- [x] **Management Auth**: Login com email/senha → JWT, middleware de validacao
+- [x] **Device Listing**: Filtros (status, device_type, tags), paginacao, ordenacao
+- [x] **Device Tags**: Adicionar/remover tags via PATCH endpoint
+- [x] **Device Inventory**: Atributos reportados via PATCH /inventory pelo agent
+- [x] **Deployment Dashboard**: Listagem com paginacao + endpoint /statistics (total, por status)
+- [x] **Deployment Details**: Status por device via GET /deployments/{id}/devices
+- [x] **Artifact Management**: Listagem, download, remocao com cleanup do storage
+- [x] **CORS**: Configuravel via HARBOR_CORS_ORIGINS, expondo headers necessarios
 - [ ] Testes end-to-end
 
 ### Fase 4: Robustez (Semana 7+)
 > Producao-ready.
 
 - [ ] **Retry Logic**: Device tenta download N vezes
-- [ ] **Checksum Verification**: Validacao SHA-256 no download
+- [x] **Checksum Verification**: SHA-256 calculado no upload e enviado via header no download
 - [ ] **Rate Limiting**: Protecao contra polling excessivo
 - [ ] **Audit Log**: Registro de acoes (quem fez o que, quando)
-- [ ] **Graceful Shutdown**: Encerramento limpo do servidor
-- [ ] **Health Check**: Endpoint /health para monitoramento
+- [x] **Graceful Shutdown**: Encerramento limpo com signal handling (SIGINT/SIGTERM) e timeout de 10s
+- [x] **Health Check**: Endpoint GET /health retorna {"status": "ok"}
 - [ ] **Metricas**: Prometheus-compatible /metrics (opcional)
 - [ ] **Cleanup Job**: Remover artifacts orfaos do storage
 
@@ -680,23 +680,37 @@ volumes:
 
 ---
 
-## 12. Proximos Passos (Ordem de Implementacao)
+## 12. Progresso da Implementacao
 
-1. **Inicializar projeto Go** — `go mod init`, dependencias, estrutura de dirs
-2. **Config** — Struct de configuracao, leitura de env vars
-3. **Database** — Conexao pgx, pool, migrations SQL
-4. **Domain** — Entidades Device, Artifact, Deployment
-5. **Repository** — Implementacao PostgreSQL dos repos
-6. **Storage** — FileStore local para artifacts
-7. **Device Service** — Logica de admissao, auth, identity hash
-8. **Device API** — POST /auth, PATCH /inventory
-9. **Artifact Service** — Upload, validacao, checksum
-10. **Artifact API** — POST/GET/DELETE endpoints
-11. **Deployment Service** — Criacao, resolucao de targets, lifecycle
-12. **Deployment API** — CRUD + status tracking
-13. **Device Polling** — GET /deployments/next + download + status report
-14. **Management Auth** — JWT login/refresh
-15. **Management API** — Todos os endpoints com paginacao/filtros
-16. **Docker** — Dockerfile multi-stage + docker-compose.yml
-17. **Testes** — Unit + integration com testcontainers
-18. **Documentacao** — OpenAPI/Swagger spec para o frontend
+### Concluido
+
+1. ~~**Inicializar projeto Go**~~ — go.mod, dependencias, estrutura de dirs
+2. ~~**Config**~~ — Struct de configuracao com env vars e defaults
+3. ~~**Database**~~ — Conexao pgx pool + embedded migrations (golang-migrate)
+4. ~~**Domain**~~ — Entidades Device, Artifact, Deployment com interfaces de repositorio
+5. ~~**Repository**~~ — Implementacao PostgreSQL completa (devices, artifacts, deployments)
+6. ~~**Storage**~~ — FileStore local com diretorio por data (YYYY/MM/DD)
+7. ~~**Device Service**~~ — Admissao, auth token opaco, SHA-256 identity hash
+8. ~~**Device API**~~ — POST /auth, PATCH /inventory, GET /deployments/next, download, status
+9. ~~**Artifact Service**~~ — Upload multipart, validacao, SHA-256 checksum
+10. ~~**Artifact API**~~ — POST/GET/DELETE + download com checksum header
+11. ~~**Deployment Service**~~ — Criacao, resolucao de targets (IDs/tags/tipos), lifecycle
+12. ~~**Deployment API**~~ — CRUD + cancel + status por device + statistics
+13. ~~**Device Polling**~~ — GET /deployments/next + stream download + status report
+14. ~~**Management Auth**~~ — JWT login com bcrypt password hash
+15. ~~**Management API**~~ — Todos os endpoints com paginacao, filtros e ordenacao
+16. ~~**Docker**~~ — Dockerfile multi-stage + docker-compose.yml com healthcheck
+17. ~~**CORS**~~ — Configuravel via env var, headers expostos
+18. ~~**Health Check**~~ — GET /health endpoint
+19. ~~**Graceful Shutdown**~~ — Signal handling + timeout
+
+### Pendente
+
+1. **Testes** — Unit tests dos services + integration com testcontainers
+2. **Documentacao** — OpenAPI/Swagger spec para o frontend
+3. **Retry Logic** — Tentativas automaticas de download no agent
+4. **Rate Limiting** — Protecao contra polling excessivo
+5. **Audit Log** — Registro de acoes (quem, o que, quando)
+6. **Metricas** — Prometheus /metrics endpoint
+7. **Cleanup Job** — Remocao de artifacts orfaos do storage
+8. **Auth Refresh** — Endpoint POST /auth/refresh para renovar JWT

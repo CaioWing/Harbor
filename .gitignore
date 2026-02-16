@@ -7,3 +7,6 @@ bin/
 *.env.local
 /data/
 vendor/
+
+node_modules/
+frontend/dashboard/.env

@@ -787,7 +787,7 @@ watch -n 5 "curl -s http://localhost:8080/api/v1/management/deployments/$DEPLOY_
 ---
  
 ## Desenvolvimento
- 
+
 ```bash
 # Build
 make build
@@ -803,9 +803,22 @@ make docker-up     # Subir
 make docker-down   # Parar
 make docker-logs   # Ver logs
 ```
- 
+
+### Dashboard Frontend (WIP)
+
+O frontend inicial do dashboard esta em `frontend/dashboard`.
+
+```bash
+cd frontend/dashboard
+cp .env.example .env
+npm install
+npm run dev
+```
+
+O app sobe em `http://localhost:5173` e usa proxy para a API em `http://localhost:8080`.
+
 ### Estrutura do Projeto
- 
+
 ```
 Harbor/
 ├── cmd/harbor/main.go              # Entrypoint
@@ -822,6 +835,7 @@ Harbor/
 │   ├── service/                    # Logica de negocio
 │   └── storage/                    # Armazenamento de arquivos
 ├── migrations/                     # SQL migrations
+├── frontend/dashboard/             # Dashboard React (WIP)
 ├── Dockerfile                      # Build multi-stage
 ├── docker-compose.yml              # Dev environment
 └── Makefile                        # Comandos uteis

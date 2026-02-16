@@ -806,10 +806,10 @@ make docker-logs   # Ver logs
 
 ### Dashboard Frontend (WIP)
 
-O frontend inicial do dashboard esta em `frontend/dashboard`.
+O frontend inicial do dashboard esta em `frontend`.
 
 ```bash
-cd frontend/dashboard
+cd frontend
 cp .env.example .env
 npm install
 npm run dev
@@ -835,7 +835,7 @@ Harbor/
 │   ├── service/                    # Logica de negocio
 │   └── storage/                    # Armazenamento de arquivos
 ├── migrations/                     # SQL migrations
-├── frontend/dashboard/             # Dashboard React (WIP)
+├── frontend/                       # Dashboard React (WIP)
 ├── Dockerfile                      # Build multi-stage
 ├── docker-compose.yml              # Dev environment
 └── Makefile                        # Comandos uteis

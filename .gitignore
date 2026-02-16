@@ -9,4 +9,6 @@ bin/
 vendor/
 
 node_modules/
-frontend/dashboard/.env
+frontend/node_modules/
+frontend/dist/
+frontend/.env

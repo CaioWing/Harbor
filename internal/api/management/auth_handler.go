@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/CaioWing/Harbor/internal/api/middleware"
 	"github.com/CaioWing/Harbor/internal/api/response"
 	"github.com/CaioWing/Harbor/internal/auth"
 
@@ -56,6 +57,26 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	token, expiresAt, err := h.jwtMgr.Generate("admin")
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "failed to generate token")
+		return
+	}
+
+	response.JSON(w, http.StatusOK, loginResponse{
+		Token:     token,
+		ExpiresAt: expiresAt.Format("2006-01-02T15:04:05Z"),
+	})
+}
+
+// Refresh generates a new JWT token for an already authenticated user.
+func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value(middleware.UserIDKey).(string)
+	if !ok || userID == "" {
+		response.Error(w, http.StatusUnauthorized, "invalid token")
+		return
+	}
+
+	token, expiresAt, err := h.jwtMgr.Generate(userID)
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, "failed to generate token")
 		return

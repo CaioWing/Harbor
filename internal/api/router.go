@@ -21,6 +21,7 @@ type RouterDeps struct {
 	DeviceSvc     *service.DeviceService
 	ArtifactSvc   *service.ArtifactService
 	DeploymentSvc *service.DeploymentService
+	AuditSvc      *service.AuditService
 	JWTManager    *auth.JWTManager
 	CORSOrigins   string
 	Logger        *slog.Logger
@@ -29,11 +30,15 @@ type RouterDeps struct {
 func NewRouter(deps RouterDeps) http.Handler {
 	r := chi.NewRouter()
 
+	// Metrics
+	metrics := middleware.NewMetrics()
+
 	// Global middleware
 	r.Use(chimiddleware.RequestID)
 	r.Use(chimiddleware.RealIP)
 	r.Use(chimiddleware.Recoverer)
 	r.Use(middleware.Logger(deps.Logger))
+	r.Use(metrics.Middleware())
 
 	// CORS
 	origins := strings.Split(deps.CORSOrigins, ",")
@@ -51,12 +56,18 @@ func NewRouter(deps RouterDeps) http.Handler {
 		response.JSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
 
+	// Prometheus metrics
+	r.Get("/metrics", metrics.Handler())
+
 	// Device API — used by harbor-agent on devices
 	deviceAuthHandler := device.NewAuthHandler(deps.DeviceSvc)
 	deviceDeployHandler := device.NewDeploymentHandler(deps.DeploymentSvc, deps.ArtifactSvc)
 	deviceInventoryHandler := device.NewInventoryHandler(deps.DeviceSvc)
 
 	r.Route("/api/v1/device", func(r chi.Router) {
+		// Rate limit device polling: 10 req/s with burst of 20
+		r.Use(middleware.RateLimit(10, 20))
+
 		// Auth endpoint (no token required)
 		r.Post("/auth", deviceAuthHandler.Authenticate)
 
@@ -75,14 +86,25 @@ func NewRouter(deps RouterDeps) http.Handler {
 	mgmtDeviceHandler := management.NewDeviceHandler(deps.DeviceSvc)
 	mgmtArtifactHandler := management.NewArtifactHandler(deps.ArtifactSvc)
 	mgmtDeploymentHandler := management.NewDeploymentHandler(deps.DeploymentSvc)
+	mgmtAuditHandler := management.NewAuditHandler(deps.AuditSvc)
 
 	r.Route("/api/v1/management", func(r chi.Router) {
+		// Rate limit management API: 30 req/s with burst of 60
+		r.Use(middleware.RateLimit(30, 60))
+
 		// Login (no auth required)
 		r.Post("/auth/login", mgmtAuthHandler.Login)
+
+		// Refresh token (requires valid JWT)
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.ManagementAuth(deps.JWTManager))
+			r.Post("/auth/refresh", mgmtAuthHandler.Refresh)
+		})
 
 		// Authenticated management endpoints
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.ManagementAuth(deps.JWTManager))
+			r.Use(middleware.AuditLog(deps.AuditSvc))
 
 			// Devices
 			r.Get("/devices", mgmtDeviceHandler.List)
@@ -106,6 +128,9 @@ func NewRouter(deps RouterDeps) http.Handler {
 			r.Get("/deployments/{id}", mgmtDeploymentHandler.Get)
 			r.Post("/deployments/{id}/cancel", mgmtDeploymentHandler.Cancel)
 			r.Get("/deployments/{id}/devices", mgmtDeploymentHandler.GetDevices)
+
+			// Audit Log
+			r.Get("/audit", mgmtAuditHandler.List)
 		})
 	})
 

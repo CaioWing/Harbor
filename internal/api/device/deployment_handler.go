@@ -28,6 +28,13 @@ type nextDeploymentResponse struct {
 	DeploymentID string           `json:"deployment_id"`
 	DDID         string           `json:"dd_id"`
 	Artifact     artifactResponse `json:"artifact"`
+	Retry        retryConfig      `json:"retry"`
+}
+
+type retryConfig struct {
+	MaxAttempts int `json:"max_attempts"`
+	IntervalSec int `json:"interval_sec"`
+	BackoffMul  int `json:"backoff_multiplier"`
 }
 
 type artifactResponse struct {
@@ -73,6 +80,11 @@ func (h *DeploymentHandler) GetNext(w http.ResponseWriter, r *http.Request) {
 			DownloadURL:    fmt.Sprintf("/api/v1/device/deployments/%s/download", dd.ID),
 			PreInstallCmd:  art.PreInstallCmd,
 			PostInstallCmd: art.PostInstallCmd,
+		},
+		Retry: retryConfig{
+			MaxAttempts: 3,
+			IntervalSec: 30,
+			BackoffMul:  2, // exponential backoff: 30s, 60s, 120s
 		},
 	})
 }

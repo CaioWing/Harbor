@@ -51,7 +51,9 @@ func run(log *slog.Logger) error {
 	log.Info("migrations completed")
 
 	// Database connection pool
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	pool, err := pgxpool.New(ctx, cfg.DB.DSN())
 	if err != nil {
 		return fmt.Errorf("connect db: %w", err)
@@ -74,11 +76,17 @@ func run(log *slog.Logger) error {
 	deviceRepo := postgres.NewDeviceRepo(pool)
 	artifactRepo := postgres.NewArtifactRepo(pool)
 	deploymentRepo := postgres.NewDeploymentRepo(pool)
+	auditRepo := postgres.NewAuditRepo(pool)
 
 	// Services
 	deviceSvc := service.NewDeviceService(deviceRepo, log)
 	artifactSvc := service.NewArtifactService(artifactRepo, store, log)
 	deploymentSvc := service.NewDeploymentService(deploymentRepo, deviceRepo, artifactRepo, log)
+	auditSvc := service.NewAuditService(auditRepo, log)
+	cleanupSvc := service.NewCleanupService(artifactRepo, deploymentRepo, store, log)
+
+	// Start cleanup scheduler (every 6 hours)
+	go cleanupSvc.StartScheduler(ctx, 6*time.Hour)
 
 	// Auth
 	jwtMgr := auth.NewJWTManager(cfg.Auth.JWTSecret, cfg.Auth.JWTExpiry)
@@ -88,6 +96,7 @@ func run(log *slog.Logger) error {
 		DeviceSvc:     deviceSvc,
 		ArtifactSvc:   artifactSvc,
 		DeploymentSvc: deploymentSvc,
+		AuditSvc:      auditSvc,
 		JWTManager:    jwtMgr,
 		CORSOrigins:   cfg.CORS.AllowedOrigins,
 		Logger:        log,
@@ -121,8 +130,11 @@ func run(log *slog.Logger) error {
 		return fmt.Errorf("server error: %w", err)
 	}
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	// Cancel context to stop background goroutines (cleanup scheduler)
+	cancel()
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		return fmt.Errorf("shutdown: %w", err)

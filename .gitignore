@@ -1,0 +1,9 @@
+bin/
+/harbor
+*.exe
+*.test
+*.out
+.env
+*.env.local
+/data/
+vendor/

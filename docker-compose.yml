@@ -1,0 +1,40 @@
+services:
+  harbor:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - HARBOR_DB_HOST=postgres
+      - HARBOR_DB_PORT=5432
+      - HARBOR_DB_NAME=harbor
+      - HARBOR_DB_USER=harbor
+      - HARBOR_DB_PASSWORD=harbor
+      - HARBOR_JWT_SECRET=dev-secret-change-in-production
+      - HARBOR_STORAGE_PATH=/data/artifacts
+      - HARBOR_CORS_ORIGINS=http://localhost:3000
+    volumes:
+      - artifacts:/data/artifacts
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: harbor
+      POSTGRES_USER: harbor
+      POSTGRES_PASSWORD: harbor
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U harbor"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
+  artifacts:
